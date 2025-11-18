@@ -706,7 +706,7 @@ return (
                   {"  "}{line.score.toFixed(2)}
                 </span>
               </div>
-              <p className="bubble-text">{line.text}</p>
+              <p className="text">{line.text}</p>
             </div>
 
           </div>
