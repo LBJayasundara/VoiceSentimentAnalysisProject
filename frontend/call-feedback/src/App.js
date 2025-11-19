@@ -338,25 +338,7 @@ const UploadAnalyzer = () => {
     }
   };
 
-  const getSentimentDisplay = (score) => {
-    let emoji;
-    let className;
-    let sentimentText;
-    if (score >= 0.7) {
-      emoji = "🙂";
-      className = "sentiment-positive";
-      sentimentText = "Satisfied";
-    } else if (score <= 0.35) {
-      emoji = "😠";
-      className = "sentiment-negative";
-      sentimentText = "Unsatisfied";
-    } else {
-      emoji = "😐";
-      className = "sentiment-neutral";
-      sentimentText = "Neutral";
-    }
-    return { emoji, className, sentimentText };
-  };
+ 
 
   const handleCancelAnalysis = () => {
     setCanceling(true);
@@ -376,353 +358,171 @@ const UploadAnalyzer = () => {
     const formData = new FormData();
     formData.append("audio", file);
 
-  //   try {
-  //     const response = await fetch("http://127.0.0.1:5000/analyze", {
-  //       method: "POST",
-  //       body: formData,
-  //       signal: signal,
-  //     });
-
-  //     if (!response.ok) {
-  //       const errorData = await response.json();
-  //       if (errorData.error !== "Analysis canceled by user.") {
-  //         console.error(
-  //           "Error: " + (errorData.error || "Unknown server error")
-  //         );
-  //       }
-  //       return;
-  //     }
-
-  //     const data = await response.json();
-  //     const transcriptText = data.text || "";
-  //     const transcriptLines = transcriptText.split("\n").map((line, idx) => {
-  //       const lineScore = Math.random();
-  //       return {
-  //         speaker: idx % 2 === 0 ? "Agent" : "Customer",
-  //         time: `00:00:${String((idx + 1) * 5).padStart(2, "0")}`,
-  //         text: line,
-  //         score: lineScore,
-  //       };
-  //     });
-
-  //     const backendEmotion = data.emotion || "neutral";
-  //     let overallScore;
-  //     if (backendEmotion === "positive") {
-  //       overallScore = 0.8;
-  //     } else if (backendEmotion === "negative") {
-  //       overallScore = 0.2;
-  //     } else {
-  //       overallScore = 0.5;
-  //     }
-  //     const overallSentimentDetails = getSentimentDisplay(overallScore);
-  //     setResult({
-  //       overall: overallSentimentDetails.sentimentText,
-  //       overallClassName: overallSentimentDetails.className,
-  //       transcript: transcriptLines,
-  //     });
-  //   } catch (err) {
-  //     if (err.name === "AbortError") {
-  //     } else {
-  //       console.error(err);
-  //       console.error("Error analyzing audio: " + err.message);
-  //     }
-  //   } finally {
-  //     setLoading(false);
-  //     setCanceling(false);
-  //     abortControllerRef.current = null;
-  //   }
-  // };
-
-  // const downloadTranscript = () => {
-  //   if (!result) return;
-  //   const content = result.transcript
-  //     .map((line) => `[${line.time}] ${line.speaker}: ${line.text}`)
-  //     .join("\n");
-  //   const blob = new Blob([content], { type: "text/plain" });
-  //   const url = URL.createObjectURL(blob);
-  //   const a = document.createElement("a");
-  //   a.href = url;
-  //   a.download = "call_transcript.txt";
-  //   a.click();
-  //   URL.revokeObjectURL(url);
-  // };
+  
     try {
-          const response = await fetch("http://127.0.0.1:5000/analyze", {
-            method: "POST",
-            body: formData,
-            signal: signal,
+      const response = await fetch("http://127.0.0.1:5000/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert("Error: " + errorData.error);
+        setLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+
+      // Flatten speaker segments for display
+      const transcriptLines = [];
+      Object.entries(data.speakers).forEach(([speaker, info]) => {
+        info.segments.forEach((seg) => {
+          transcriptLines.push({
+            speaker: speaker,
+            time: `00:00:${String(Math.floor(seg.start)).padStart(2, "0")}`,
+            text: seg.text,
+            sentiment: seg.sentiment,
+            confidence: seg.confidence
           });
+        });
+      });
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            alert("Error: " + errorData.error);
-            setLoading(false);
-            return;
-          }
+      setResult({ data, transcriptLines });
+    } catch (err) {
+      console.error(err);
+      alert("Error analyzing audio");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-          const data = await response.json();
+  const downloadTranscript = () => {
+    if (!result) return;
+    const content = result.transcriptLines
+      .map(line => `[${line.time}] ${line.speaker}: ${line.text} (${line.sentiment})`)
+      .join("\n");
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "call_transcript.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-          // Ensure text exists
-          const transcriptText = data.text || "";
-          const transcriptLines = transcriptText.split("\n").map((line, idx) => ({
-            speaker: idx % 2 === 0 ? "Agent" : "Customer", // simple mock
-            time: `00:00:${String((idx + 1) * 5).padStart(2, "0")}`,
-            text: line,
-            score: Math.random() * 0.5 + 0.5,
-          }));
-
-          setResult({
-            overall: data.emotion,
-            transcript: transcriptLines,
-          });
-        } catch (err) {
-          console.error(err);
-          alert("Error analyzing audio");
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      const downloadTranscript = () => {
-        if (!result) return;
-        const content = result.transcript
-          .map((line) => `[${line.time}] ${line.speaker}: ${line.text}`)
-          .join("\n");
-        const blob = new Blob([content], { type: "text/plain" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "call_transcript.txt";
-        a.click();
-        URL.revokeObjectURL(url);
-      };
-
-      
-return (
-  <div className="main-content">
-    {/* Upload Card */}
-    <div className="card upload-card">
-      <div
-        className="upload-area"
-        onClick={() =>
-          !(loading || canceling) &&
-          fileInputRef.current &&
-          fileInputRef.current.click()
-        }
-        style={{ cursor: loading || canceling ? "not-allowed" : "pointer" }}
-      >
-        {loading || canceling ? (
-          <>
-            <Loader className="spinner-icon upload-icon" size={50} />
-            <p className="upload-title" style={{ marginTop: "15px" }}>
-              {canceling ? "Canceling..." : "Analysing Audio..."}
-            </p>
-            {file && <p className="upload-subtitle">{file.name}</p>}
-          </>
-        ) : result ? (
-          <>
-            <CheckCircle className="upload-icon" style={{ color: "#16a34a" }} />
-            <p className="upload-title" style={{ marginTop: "10px" }}>
-              Analysis Completed
-            </p>
-
-            {file && (
-              <div className="file-display" style={{ marginTop: "10px" }}>
-                <p className="file-name">{file.name}</p>
-                <button
-                  className="cancel-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCancelUpload();
-                  }}
-                  title="Remove file"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <UploadCloud className="upload-icon" />
-            <p className="upload-title">Upload your call audio</p>
-            <p className="upload-subtitle">(.wav / .mp3)</p>
-
-            {file && (
-              <div className="file-display">
-                <p className="file-name">{file.name}</p>
-                <button
-                  className="cancel-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCancelUpload();
-                  }}
-                  title="Cancel selection"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Hidden File Input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="hidden"
-          accept=".wav,.mp3"
-          disabled={loading || canceling}
-        />
-      </div>
-
-      {/* Analyze Button */}
-      <div className="button-container">
-        <button
-          onClick={analyzeAudio}
-          disabled={!file || loading || canceling}
-          className={`analyze-btn ${!file ? "disabled" : ""}`}
+  return (
+    <div className="main-content">
+      {/* Upload Card */}
+      <div className="card upload-card">
+        <div
+          className="upload-area"
+          onClick={() => !(loading || canceling) && fileInputRef.current && fileInputRef.current.click()}
+          style={{ cursor: loading || canceling ? "not-allowed" : "pointer" }}
         >
-          {canceling ? "Canceling..." : loading ? "Analyzing..." : "Analyze"}
-        </button>
+          {loading ? (
+            <>
+              <Loader className="spinner-icon upload-icon" size={50} />
+              <p className="upload-title" style={{ marginTop: "15px" }}>
+                {canceling ? "Canceling..." : "Analyzing Audio..."}
+              </p>
+              {file && <p className="upload-subtitle">{file.name}</p>}
+            </>
+          ) : result ? (
+            <>
+              <CheckCircle className="upload-icon" style={{ color: "#16a34a" }} />
+              <p className="upload-title" style={{ marginTop: "10px" }}>
+                Analysis Completed
+              </p>
+              {file && (
+                <div className="file-display" style={{ marginTop: "10px" }}>
+                  <p className="file-name">{file.name}</p>
+                  <button
+                    className="cancel-btn"
+                    onClick={(e) => { e.stopPropagation(); setFile(null); setResult(null); }}
+                    title="Remove file"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <UploadCloud className="upload-icon" />
+              <p className="upload-title">Upload your call audio</p>
+              <p className="upload-subtitle">(.wav / .mp3)</p>
+              {file && (
+                <div className="file-display">
+                  <p className="file-name">{file.name}</p>
+                  <button
+                    className="cancel-btn"
+                    onClick={(e) => { e.stopPropagation(); setFile(null); }}
+                    title="Cancel selection"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
 
-        {loading && !canceling && (
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept=".wav,.mp3"
+            disabled={loading || canceling}
+          />
+        </div>
+
+        {/* Analyze Button */}
+        <div className="button-container">
           <button
-            className="cancel-analysis-btn"
-            onClick={handleCancelAnalysis}
-            title="Cancel Analysis"
+            onClick={analyzeAudio}
+            disabled={!file || loading || canceling}
+            className={`analyze-btn ${!file ? "disabled" : ""}`}
           >
-            <X size={18} />
+            {canceling ? "Canceling..." : loading ? "Analyzing..." : "Analyze"}
           </button>
+        </div>
+
+        <p className="supported-text">
+          Supported Languages — English | Sinhala | Tamil
+        </p>
+      </div>
+
+      {/* Result Section */}
+      <div className="card result-card">
+        <h2 className="result-title">Sentiment Analysis Results</h2>
+
+        {!result ? (
+          <div className="placeholder">
+            <Phone className="placeholder-icon" />
+            <p>Upload an audio file and click “Analyze” to see results here.</p>
+          </div>
+        ) : (
+          <div className="results">
+            {/* Transcript */}
+            <div className="transcript-section">
+              <h3>Transcript</h3>
+              {result.transcriptLines.map((line, idx) => (
+                <p key={idx} className={`text ${line.sentiment.toLowerCase()}`}>
+                  [{line.time}] {line.speaker}: {line.text} ({line.sentiment})
+                </p>
+              ))}
+            </div>
+
+            {/* Download button */}
+            <button className="download-btn" onClick={downloadTranscript}>
+              <Download className="download-icon" /> Download Transcript
+            </button>
+          </div>
         )}
       </div>
-
-      <p className="supported-text">
-        Supported Languages — English | Sinhala | Tamil
-      </p>
     </div>
-
-    {/* Result Section */}
-    {/* <div className="card result-card">
-      <h2 className="result-title">Sentiment Analysis Results</h2>
-
-      {!result ? (
-        <div className="placeholder">
-          <Phone className="placeholder-icon" />
-          <p>Upload an audio file and click “Analyze” to see results here.</p>
-        </div>
-      ) : (
-        <div className="results">
-          <p className="overall">
-            Overall Sentiment:{" "}
-            <span
-              className={
-                result.overall.toLowerCase().includes("positive")
-                  ? "positive"
-                  : "negative"
-              }
-            >
-              {result.overall}
-            </span>
-          </p>
-
-          {result.transcript.map((line, index) => (
-            <div key={index} className="transcript-line">
-              <div className="speaker-row">
-                {line.speaker === "Agent" ? (
-                  <Bot className="speaker-icon agent" />
-                ) : (
-                  <User className="speaker-icon customer" />
-                )}
-                <strong>{line.speaker}</strong>
-                <span className="timestamp">{line.time}</span>
-                <span className="sentiment-score">
-                  {line.score.toFixed(2)}
-                </span>
-              </div>
-              <p className="text">{line.text}</p>
-            </div>
-          ))}
-
-          <button className="download-btn" onClick={downloadTranscript}>
-            <Download className="download-icon" /> Download Transcript
-          </button>
-        </div>
-      )}
-    </div>
-  </div> */}
-
-
-{/* Result Section */}
-<div className="card result-card enhanced-result">
-  <h2 className="result-title gradient-title">Sentiment Analysis Results</h2>
-
-  {!result ? (
-    <div className="placeholder fancy-placeholder">
-      <Phone className="placeholder-icon" />
-      <p className="placeholder-text">
-        Upload an audio file and click <strong>“Analyze”</strong> to see detailed sentiment results.
-      </p>
-    </div>
-  ) : (
-    <div className="results improved-results">
-
-      {/* Overall Sentiment Box */}
-      <div className="overall-box">
-        <p className="overall-label">Overall Sentiment</p>
-        <span
-          className={`overall-badge ${
-            result.overall.toLowerCase().includes("positive")
-              ? "overall-positive"
-              : result.overall.toLowerCase().includes("negative")
-              ? "overall-negative"
-              : "overall-neutral"
-          }`}
-        >
-          {result.overall === "positive" ? "😊 Positive" : 
-           result.overall === "negative" ? "😡 Negative" : 
-           "😐 Neutral"}
-        </span>
-      </div>
-
-      {/* Transcript Lines */}
-      <div className="transcript-container">
-        {result.transcript.map((line, index) => (
-          <div key={index} className="transcript-line enhanced-line">
-            
-            <div className={`bubble ${line.speaker === "Agent" ? "agent-bubble" : "customer-bubble"}`}>
-              <div className="bubble-header">
-                {line.speaker === "Agent" ? (
-                  <Bot className="speaker-icon agent" />
-                ) : (
-                  <User className="speaker-icon customer" />
-                )}
-                <strong>{line.speaker}</strong>
-                <span className="timestamp">{line.time}</span>
-
-                <span className="inline-score">
-                  {line.score >= 0.66 ? "😊" : line.score <= 0.33 ? "😡" : "😐"} 
-                  {"  "}{line.score.toFixed(2)}
-                </span>
-              </div>
-              <p className="text">{line.text}</p>
-            </div>
-
-          </div>
-        ))}
-      </div>
-
-      {/* Download Transcript */}
-      <button className="download-btn modern-download" onClick={downloadTranscript}>
-        <Download className="download-icon" /> Download Transcript
-      </button>
-    </div>
-  )}
-</div>
-  </div>
-
-)}
+  );}
 
 
 
